@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Ajustes del Sistema - Black Dog</title>
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link rel="icon" href="/static/favicon.png" type="image/png">
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Roboto', 'Montserrat', sans-serif;
+      background: linear-gradient(120deg, #181818, #232526);
+      color: #fff;
+    }
+    header {
+      background: #111;
+      padding: 20px 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid #f1c40f44;
+    }
+    .logo { height: 48px; }
+    .menu-buttons button {
+      background: none;
+      border: 2px solid #f1c40f;
+      color: #f1c40f;
+      font-weight: 600;
+      margin-left: 14px;
+      padding: 10px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+    .menu-buttons button:hover {
+      background: #f1c40f;
+      color: #000;
+    }
+    .container { padding: 30px 50px; }
+    h2 { color: #f1c40f; margin-bottom: 25px; }
+    .section {
+      background-color: #222;
+      padding: 20px;
+      margin-top: 25px;
+      border-radius: 12px;
+    }
+    .section h3, .section h4 {
+      color: #f1c40f;
+      margin-bottom: 10px;
+    }
+    .subsection { margin-top: 15px; }
+    .entry {
+      display: flex;
+      align-items: center;
+      margin: 6px 0;
+    }
+    .entry label {
+      width: 230px;
+      font-size: 15px;
+    }
+    .entry input {
+      width: 80px;
+      background-color: #333;
+      color: white;
+      border: none;
+      text-align: center;
+      padding: 6px;
+      border-radius: 6px;
+      margin-right: 6px;
+    }
+    .entry button {
+      background-color: #444;
+      color: white;
+      border: none;
+      padding: 6px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      margin-left: 4px;
+    }
+    .row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 40px;
+    }
+    .col { flex: 1 1 45%; }
+    .btn-save {
+      background: linear-gradient(90deg, #f1c40f, #fff700);
+      color: #000;
+      font-weight: bold;
+      border: none;
+      border-radius: 10px;
+      padding: 14px 24px;
+      margin-right: 12px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .btn-reset {
+      background-color: #dc3545;
+      color: white;
+      border: none;
+      padding: 14px 24px;
+      border-radius: 10px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+    .acciones { margin-top: 30px; }
+    #mensaje {
+      margin-top: 20px;
+      color: lightgreen;
+      font-weight: bold;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <img src="/static/logo.png" alt="Logo Black Dog" class="logo">
+  <div class="menu-buttons">
+    <button onclick="location.href='/index'"><i class="fas fa-arrow-left"></i> Volver a Inicio</button>
+    <button onclick="location.href='/logout'"><i class="fas fa-sign-out-alt"></i> Cerrar Sesión</button>
+  </div>
+</header>
+
+<div class="container">
+  <h2><i class="fas fa-sliders-h"></i> Ajustes del Sistema</h2>
+
+  <form id="form-ajustes">
+
+    <!-- MESES DE INVENTARIO CLAVE -->
+    <div class="section">
+      <h3><i class="fas fa-box-open"></i> Meses de Inventario - Categorías Clave</h3>
+      <div class="subsection row">
+        {% set meses_clave = {
+          "natural greatness_regular": "Natural Greatness (Regular)",
+          "natural greatness_chica": "Natural Greatness (Chica)",
+          "gosbi_regular": "Gosbi (Regular)",
+          "gosbi_chica": "Gosbi (Chica)",
+          "medicamento_regular": "Medicamento (Regular)",
+          "medicamento_chica": "Medicamento (Chica)"
+        } %}
+        {% for clave, nombre in meses_clave.items() %}
+        <div class="col">
+          <div class="entry">
+            <label>{{ nombre }}:</label>
+            <input type="number" step="0.01" name="meses_inventario_categorias[{{ clave }}]" value="{{ ajustes['meses_inventario']['categorias'].get(clave, 1.0) }}">
+            <button type="button" onclick="ajustar(this, 0.1)"><i class="fas fa-plus"></i></button>
+            <button type="button" onclick="ajustar(this, -0.1)"><i class="fas fa-minus"></i></button>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- MESES DE INVENTARIO GENERAL -->
+    <div class="section">
+      <h3><i class="fas fa-calendar-alt"></i> Meses de Inventario - General</h3>
+      <div class="entry">
+        <label>General:</label>
+        <input type="number" step="0.01" name="meses_inventario_general" value="{{ ajustes['meses_inventario']['general'] }}">
+        <button type="button" onclick="ajustar(this, 0.1)"><i class="fas fa-plus"></i></button>
+        <button type="button" onclick="ajustar(this, -0.1)"><i class="fas fa-minus"></i></button>
+      </div>
+    </div>
+
+    <!-- MINIMOS DE ALIMENTOS -->
+    <div class="section">
+      <h3><i class="fas fa-drumstick-bite"></i> Mínimos de Alimentos</h3>
+      <div class="subsection row">
+        {% for tipo, valor in ajustes['minimos_alimentos'].items() %}
+        <div class="col">
+          <div class="entry">
+            <label>{{ tipo|capitalize }}:</label>
+            <input type="number" step="1" name="minimos_alimentos_{{ tipo }}" value="{{ valor }}">
+            <button type="button" onclick="ajustar(this, 1)"><i class="fas fa-plus"></i></button>
+            <button type="button" onclick="ajustar(this, -1)"><i class="fas fa-minus"></i></button>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- ACCESORIOS Y PROCESAMIENTO -->
+    <div class="section">
+      <h3><i class="fas fa-paw"></i> Accesorios: Mínimos, Meses de Inventario y Mínimos para Procesar</h3>
+      {% for categoria in ajustes['minimos_accesorios']['regular'].keys() %}
+      <div class="subsection">
+        <h4>{{ categoria|title }}</h4>
+        <div class="row">
+          {% for tipo in ['regular', 'chica'] %}
+          <div class="col">
+            <div class="entry">
+              <label>Mínimo ({{ tipo|capitalize }}):</label>
+              <input type="number" step="1" name="minimos_accesorios_{{ tipo }}_{{ categoria|replace(' ', '_')|replace('/', '_') }}" value="{{ ajustes['minimos_accesorios'][tipo][categoria] }}">
+              <button type="button" onclick="ajustar(this, 1)"><i class="fas fa-plus"></i></button>
+              <button type="button" onclick="ajustar(this, -1)"><i class="fas fa-minus"></i></button>
+            </div>
+            <div class="entry">
+              <label>Meses Inv. ({{ tipo|capitalize }}):</label>
+              {% set meses_key = categoria ~ '_' ~ tipo %}
+              <input type="number" step="0.01" name="meses_inventario_categorias[{{ meses_key }}]" value="{{ ajustes['meses_inventario']['categorias'].get(meses_key, 1) }}">
+              <button type="button" onclick="ajustar(this, 0.1)"><i class="fas fa-plus"></i></button>
+              <button type="button" onclick="ajustar(this, -0.1)"><i class="fas fa-minus"></i></button>
+            </div>
+            <div class="entry">
+              <label>Mín. Procesar ({{ tipo|capitalize }}):</label>
+              <input type="number" step="1" name="minimos_para_pedir_{{ tipo }}_{{ categoria|replace(' ', '_')|replace('/', '_') }}" value="{{ ajustes['minimos_para_pedir'][tipo][categoria] }}">
+              <button type="button" onclick="ajustar(this, 1)"><i class="fas fa-plus"></i></button>
+              <button type="button" onclick="ajustar(this, -1)"><i class="fas fa-minus"></i></button>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- MINIMOS DE MEDICAMENTOS -->
+    <div class="section">
+      <h3><i class="fas fa-pills"></i> Mínimos de Medicamentos</h3>
+      <div class="row">
+        {% for tipo, val in ajustes['minimos_medicamentos'].items() %}
+        <div class="col">
+          <div class="entry">
+            <label>{{ tipo|capitalize }}:</label>
+            <input type="number" step="1" name="minimos_medicamentos_{{ tipo }}" value="{{ val }}">
+            <button type="button" onclick="ajustar(this, 1)"><i class="fas fa-plus"></i></button>
+            <button type="button" onclick="ajustar(this, -1)"><i class="fas fa-minus"></i></button>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div class="acciones">
+      <button type="submit" class="btn-save"><i class="fas fa-save"></i> Guardar Ajustes</button>
+      <button type="button" onclick="resetearAjustes()" class="btn-reset"><i class="fas fa-undo"></i> Restablecer</button>
+    </div>
+  </form>
+
+  <div id="mensaje"></div>
+</div>
+
+<script>
+  function ajustar(btn, cambio) {
+    const input = btn.parentNode.querySelector('input');
+    let val = parseFloat(input.value);
+    if (isNaN(val)) val = 0;
+    val += cambio;
+    if (input.step === "1" && val < 0) val = 0;
+    input.value = (input.step === "1") ? parseInt(val) : parseFloat(val).toFixed(2);
+  }
+
+  function resetearAjustes() {
+    if (confirm("¿Deseas restablecer los ajustes por defecto?")) {
+      $.post("/resetear_ajustes", () => location.reload());
+    }
+  }
+
+  $('#form-ajustes').submit(function (e) {
+    e.preventDefault();
+    const datos = $(this).serialize();
+    $.post("/guardar_ajustes", datos)
+      .done(() => {
+        $('#mensaje').text("Ajustes guardados correctamente.");
+        // Comentado para evitar redirección:
+        // setTimeout(() => { window.location.href = '/index'; }, 2000);
+      })
+      .fail(() => {
+        $('#mensaje').text("Error al guardar ajustes.").css('color', 'red');
+      });
+  });
+</script>
+
+</body>
+</html>

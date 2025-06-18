@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>BLADRI | Panel de Pedidos</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/static/favicon.png">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;400&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Roboto', 'Montserrat', sans-serif;
+      background: linear-gradient(120deg, #181818, #232526);
+      color: #fff;
+    }
+
+    header {
+      background: #111;
+      padding: 20px 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid #f1c40f44;
+    }
+
+    .logo {
+      height: 48px;
+    }
+
+    .menu-buttons button {
+      background: none;
+      border: 2px solid #f1c40f;
+      color: #f1c40f;
+      font-weight: 600;
+      margin-left: 14px;
+      padding: 10px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+
+    .menu-buttons button:hover {
+      background: #f1c40f;
+      color: #000;
+    }
+
+    main {
+      padding: 40px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    h1 {
+      color: #f1c40f;
+      margin-bottom: 30px;
+    }
+
+    .btn {
+      background: linear-gradient(90deg, #f1c40f, #fff700);
+      color: #000;
+      font-weight: bold;
+      border: none;
+      border-radius: 10px;
+      padding: 14px 26px;
+      margin: 10px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 20px #f1c40f88;
+    }
+
+    #progress {
+      width: 80%;
+      max-width: 600px;
+      height: 20px;
+      background: #444;
+      border-radius: 12px;
+      overflow: hidden;
+      margin: 30px auto;
+      display: none;
+    }
+
+    #bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #fff700, #f1c40f);
+      transition: width 0.4s ease;
+    }
+
+    #descargar-btn,
+    #historial-box {
+      display: none;
+    }
+
+    .historial-box {
+      background: #2c2c2c;
+      padding: 20px;
+      border-radius: 12px;
+      margin-top: 30px;
+      width: 80%;
+      max-width: 700px;
+    }
+
+    .historial-box h2 {
+      color: #f1c40f;
+      margin-bottom: 12px;
+    }
+
+    .historial-entry {
+      background: #1c1c1c;
+      margin-bottom: 10px;
+      padding: 10px 14px;
+      border-radius: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .historial-entry a {
+      background: #f1c40f;
+      color: #000;
+      padding: 6px 12px;
+      font-size: 0.9rem;
+      font-weight: bold;
+      border-radius: 6px;
+      text-decoration: none;
+    }
+
+    .historial-entry span i {
+      margin-right: 6px;
+      color: #fff700;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="/static/logo.png" alt="Black Dog" class="logo">
+    <div class="menu-buttons">
+      <button onclick="window.location.reload()"><i class="fas fa-home"></i> Inicio</button>
+      <button onclick="location.href='/txt'"><i class="fas fa-file-lines"></i> Subir TXT</button>	  
+      <button onclick="location.href='/ajustes'"><i class="fas fa-sliders-h"></i> Ajustes</button>
+      <button onclick="location.href='/logout'"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</button>
+    </div>
+  </header>
+
+  <main>
+    <h1><i class="fas fa-cart-flatbed"></i> Black Dog | Reposición Inteligente</h1>
+    <button class="btn" onclick="generar()"><i class="fas fa-bolt"></i> Generar Pedido</button>
+    <div id="progress"><div id="bar"></div></div>
+    <a id="descargar-btn" class="btn" href="#" download><i class="fas fa-download"></i> Descargar ZIP</a>
+    <button class="btn" onclick="cargarHistorial()"><i class="fas fa-history"></i> Ver Historial</button>
+    <div id="historial-box" class="historial-box"></div>
+  </main>
+
+  <script>
+    function generar() {
+      document.getElementById('progress').style.display = 'block';
+      document.getElementById('bar').style.width = '0%';
+      document.getElementById('descargar-btn').style.display = 'none';
+      document.getElementById('historial-box').style.display = 'none';
+
+      let width = 0;
+      const interval = setInterval(() => {
+        if (width >= 95) return;
+        width += 5;
+        document.getElementById('bar').style.width = width + '%';
+      }, 400);
+
+      fetch('/generar', { method: 'POST' })
+        .then(res => {
+          clearInterval(interval);
+          document.getElementById('bar').style.width = '100%';
+          return res.blob();
+        })
+        .then(blob => {
+          const url = window.URL.createObjectURL(blob);
+          const a = document.getElementById('descargar-btn');
+          a.href = url;
+          a.download = "pedido_generado.zip";
+          a.style.display = 'inline-block';
+        })
+        .catch(err => {
+          clearInterval(interval);
+          alert('Error al generar: ' + err);
+        });
+    }
+
+    function cargarHistorial() {
+      fetch('/historial')
+        .then(res => res.json())
+        .then(data => {
+          const box = document.getElementById('historial-box');
+          box.innerHTML = '<h2><i class="fas fa-clock"></i> Últimos ZIP generados</h2>';
+          data.forEach(entry => {
+            const div = document.createElement('div');
+            div.className = 'historial-entry';
+            div.innerHTML = `
+              <span><i class="fas fa-calendar-day"></i> <strong>${entry.fecha}</strong> por ${entry.usuario}</span>
+              <a href="/descargar_zip/${entry.nombre}" download><i class="fas fa-download"></i> Descargar</a>
+            `;
+            box.appendChild(div);
+          });
+          box.style.display = 'block';
+        });
+    }
+  </script>
+</body>
+</html>

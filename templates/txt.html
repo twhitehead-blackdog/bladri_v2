@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Subir TXT | Panel de Pedidos</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="/static/favicon.png">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@700;400&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Roboto', 'Montserrat', sans-serif;
+      background: linear-gradient(120deg, #181818, #232526);
+      color: #fff;
+    }
+
+    header {
+      background: #111;
+      padding: 20px 40px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 2px solid #f1c40f44;
+    }
+
+    .logo {
+      height: 48px;
+    }
+
+    .menu-buttons button {
+      background: none;
+      border: 2px solid #f1c40f;
+      color: #f1c40f;
+      font-weight: 600;
+      margin-left: 14px;
+      padding: 10px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: 0.3s;
+    }
+
+    .menu-buttons button:hover {
+      background: #f1c40f;
+      color: #000;
+    }
+
+    main {
+      padding: 40px 20px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    h1 {
+      color: #f1c40f;
+      margin-bottom: 30px;
+    }
+
+    .form-container {
+      background: #2c2c2c;
+      padding: 30px;
+      border-radius: 14px;
+      width: 90%;
+      max-width: 600px;
+      margin-bottom: 40px;
+      box-shadow: 0 4px 20px #00000044;
+    }
+
+    .form-container h2 {
+      color: #f1c40f;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    input[type="file"] {
+      background: #1c1c1c;
+      border: 1px solid #f1c40f66;
+      color: #fff;
+      padding: 12px;
+      border-radius: 8px;
+      width: 100%;
+      margin-bottom: 20px;
+    }
+
+    .btn {
+      background: linear-gradient(90deg, #f1c40f, #fff700);
+      color: #000;
+      font-weight: bold;
+      border: none;
+      border-radius: 10px;
+      padding: 14px 26px;
+      margin-top: 10px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 20px #f1c40f88;
+    }
+
+    #log-box {
+      margin-top: 20px;
+      background: #111;
+      border: 1px solid #f1c40f44;
+      border-radius: 10px;
+      padding: 16px;
+      font-family: monospace;
+      font-size: 14px;
+      max-height: 240px;
+      overflow-y: auto;
+      display: none;
+      color: #f1c40f;
+      white-space: pre-wrap;
+    }
+
+    .historial-box {
+      background: #2c2c2c;
+      padding: 20px;
+      border-radius: 12px;
+      width: 95%;
+      max-width: 900px;
+    }
+
+    .historial-box h2 {
+      color: #f1c40f;
+      margin-bottom: 20px;
+    }
+
+    .historial-table {
+      width: 100%;
+      margin-top: 10px;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .historial-header,
+    .historial-row {
+      display: grid;
+      grid-template-columns: 2.5fr 1.2fr 1.5fr 1fr 1fr 1fr;
+      padding: 12px 16px;
+      align-items: center;
+    }
+
+    .historial-header {
+      background: #333;
+      font-weight: bold;
+      color: #f1c40f;
+      border-bottom: 1px solid #444;
+    }
+
+    .historial-row {
+      background: #1c1c1c;
+      border-bottom: 1px solid #2c2c2c;
+      transition: background 0.3s;
+    }
+
+    .historial-row:hover {
+      background: #2e2e2e;
+    }
+
+    .historial-row span {
+      color: #eaeaea;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+    }
+
+    .historial-row span i {
+      color: #f1c40f;
+      margin-right: 8px;
+    }
+
+    .sin-historial {
+      color: #aaa;
+      font-size: 16px;
+      text-align: center;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <img src="/static/logo.png" alt="Black Dog" class="logo">
+    <div class="menu-buttons">
+      <button onclick="location.href='/index'"><i class="fas fa-home"></i> Inicio</button>
+      <button onclick="location.href='/ajustes'"><i class="fas fa-sliders-h"></i> Ajustes</button>
+      <button onclick="location.href='/logout'"><i class="fas fa-sign-out-alt"></i> Cerrar sesión</button>
+    </div>
+  </header>
+
+  <main>
+    <h1><i class="fas fa-file-import"></i> Subir Archivos TXT</h1>
+
+    <div class="form-container">
+      <h2><i class="fas fa-file-lines"></i> Selecciona uno o más archivos .txt</h2>
+      <form id="upload-form">
+        <input type="file" id="archivos_txt" name="archivos_txt" multiple accept=".txt" required>
+        <button type="submit" class="btn" id="btn-upload"><i class="fas fa-upload"></i> Subir Archivos</button>
+      </form>
+
+      <div id="log-box" aria-live="polite" role="log">
+        <div id="log-content">Esperando archivos...</div>
+      </div>
+    </div>
+
+    <div class="historial-box">
+      <h2><i class="fas fa-history"></i> Historial de Archivos Subidos</h2>
+      {% if historial_txt and historial_txt|length > 0 %}
+      <div class="historial-table">
+        <div class="historial-header">
+          <span>Archivo</span>
+          <span>Usuario</span>
+          <span>Fecha</span>
+          <span>Tamaño</span>
+          <span>Líneas</span>
+          <span>Estado</span>
+        </div>
+        {% for txt in historial_txt %}
+          <div class="historial-row">
+            <span><i class="fas fa-file-alt"></i> {{ txt.nombre }}</span>
+            <span>{{ txt.usuario }}</span>
+            <span>{{ txt.fecha }}</span>
+            <span>{{ txt.tamano_kb }} KB</span>
+            <span>{{ txt.lineas }}</span>
+            <span>
+              {% if txt.error %}
+                <i class="fas fa-times-circle" style="color: #e74c3c;" title="Error en procesamiento"></i> Error
+              {% else %}
+                <i class="fas fa-check-circle" style="color: #2ecc71;" title="Procesado correctamente"></i> OK
+              {% endif %}
+            </span>
+          </div>
+        {% endfor %}
+      </div>
+      {% else %}
+        <div class="sin-historial"><i class="fas fa-exclamation-circle"></i> Sin historial disponible.</div>
+      {% endif %}
+    </div>
+  </main>
+
+  <script>
+    const form = document.getElementById("upload-form");
+    const input = document.getElementById("archivos_txt");
+    const logBox = document.getElementById("log-box");
+    const logContent = document.getElementById("log-content");
+    const btn = document.getElementById("btn-upload");
+
+    // Ocultar log-box al cargar la página
+    logBox.style.display = "none";
+
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      if (!input.files.length) return;
+
+      btn.disabled = true;
+      btn.innerHTML = `<i class="fas fa-spinner fa-spin"></i> Subiendo...`;
+      logBox.style.display = "block";
+      logContent.textContent = "⏳ Procesando archivos...\n";
+
+      const formData = new FormData();
+      for (let file of input.files) {
+        formData.append("archivos_txt", file);
+      }
+
+      try {
+        const res = await fetch("/subir_txt", {
+          method: "POST",
+          body: formData
+        });
+
+        if (!res.ok) {
+          logContent.textContent = `❌ Error del servidor: ${res.status} ${res.statusText}`;
+          btn.disabled = false;
+          btn.innerHTML = `<i class="fas fa-upload"></i> Subir Archivos`;
+          return;
+        }
+
+        const data = await res.json();
+        logContent.textContent = "";
+
+        if (data.logs && Array.isArray(data.logs)) {
+          for (let linea of data.logs) {
+            logContent.textContent += "📄 " + linea + "\n";
+          }
+          logBox.scrollTop = logBox.scrollHeight; // Scroll al final
+        } else {
+          logContent.textContent = "❌ No se recibió información de log.";
+        }
+
+        btn.innerHTML = `<i class="fas fa-check"></i> Subido`;
+        input.value = ""; // Limpiar input
+      } catch (err) {
+        logContent.textContent = "❌ Error al subir los archivos.";
+        console.error(err);
+      }
+
+      btn.disabled = false;
+    });
+  </script>
+</body>
+</html>
