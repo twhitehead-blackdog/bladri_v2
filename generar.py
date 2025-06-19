@@ -9,10 +9,11 @@ import math
 from pathlib import Path
 from datetime import datetime, timedelta
 from collections import defaultdict
-import sys
-import io
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+import logging
 
+# Configurar logging en lugar de modificar stdout
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------
 # CONFIGURACIÓN GENERAL Y CONSTANTES
@@ -29,7 +30,7 @@ RUTAS = {
 TIENDAS_REGULARES = {"ocean mall", "calle 50", "albrook fields", "brisas del golf", "santa maria", "bella vista", "costa verde", "villa zaita", "condado del rey", "brisas norte", "versalles", "coco del mar", "david"}
 TIENDAS_CHICAS = {"plaza emporio"}
 
-# TIENDAS CON CLÍNICA (NUEVO)
+# TIENDAS CON CLÍNICA
 TIENDAS_CON_CLINICA = {
     "plaza emporio", "ocean mall", "bella vista", "albrook fields", 
     "brisas del golf", "calle 50", "santa maria", "villa zaita"
@@ -55,6 +56,10 @@ CONFIG_DEFAULT = {
         "chica": {"default": 2, "correa": 1, "collar": 1, "juguete": 1}
     },
     "minimos_medicamentos": {"regular": 1, "chica": 1},
+    "minimos_para_pedir": {
+        "regular": {"default": 2},
+        "chica": {"default": 1}
+    },
     "opciones_productos_grandes": {"excluir_de_tiendas_chicas": True},
     "reglas_stock_cero": {
         "aplicar_minimo_sin_ventas": True,
@@ -108,6 +113,14 @@ def determinar_tipo_producto(categoria_nombre, nombre_producto):
     elif "medicamento" in categoria or "vacuna" in categoria or "vacunas" in categoria:
         return "medicamentos"
     return "otros"
+
+def normalizar_categoria(categoria):
+    """Normaliza el nombre de la categoría para búsquedas"""
+    if not categoria:
+        return ""
+    categoria = categoria.lower().strip()
+    categoria = ''.join(c for c in categoria if c.isalnum() or c.isspace())
+    return categoria
 
 def es_producto_halloween_o_navidad(product_info):
     """FUNCIÓN DEFINITIVA: Detecta productos de Halloween y Navidad por MÚLTIPLES CRITERIOS"""
@@ -201,17 +214,6 @@ def obtener_unidad_reposicion(product_info):
     return 1
 
 # ---------------------------------------------
-# FUNCION PARA NORMALIZAR CATEGORIAS
-# ---------------------------------------------
-
-def normalizar_categoria(categoria):
-    if not categoria:
-        return ""
-    categoria = categoria.lower().strip()
-    categoria = ''.join(c for c in categoria if c.isalnum() or c.isspace())
-    return categoria
-
-# ---------------------------------------------
 # CARGA DE CONFIGURACIÓN
 # ---------------------------------------------
 
@@ -220,10 +222,10 @@ def cargar_configuracion(path="config_ajustes.json"):
     try:
         with open(path, "r", encoding="utf-8") as f:
             config = json.load(f)
-        print(f" Configuración cargada desde {path}")
+        logger.info(f"Configuración cargada desde {path}")
         return config
     except Exception as e:
-        print(f" No se pudo cargar {path}, usando configuración por defecto: {e}")
+        logger.warning(f"No se pudo cargar {path}, usando configuración por defecto: {e}")
         return CONFIG_DEFAULT
 
 # ---------------------------------------------
@@ -231,25 +233,30 @@ def cargar_configuracion(path="config_ajustes.json"):
 # ---------------------------------------------
 
 def obtener_meses_inventario_por_categoria_y_tienda(categoria_nombre, tipo_tienda, config):
+    """Obtiene meses de inventario específicos por categoría y tipo de tienda"""
     categoria = categoria_nombre.lower() if categoria_nombre else ""
     meses_generales = config.get("meses_inventario", {}).get("general", 1)
     categorias_config = config.get("meses_inventario", {}).get("categorias", {})
 
-    # Construir clave combinada para buscar en JSON
-    clave_combinada = f"{categoria}_{tipo_tienda}".strip()
-
-    # Buscar coincidencia exacta (ejemplo: "bowls y feeders_regular")
-    if clave_combinada in categorias_config:
-        return categorias_config[clave_combinada]
-
-    # Buscar coincidencia solo por categoría (ejemplo: "bowls y feeders")
-    if categoria in categorias_config:
-        return categorias_config[categoria]
-
-    # Usar default si existe
-    if "default" in categorias_config:
-        return categorias_config["default"]
-
+    # Buscar en la estructura del JSON actual
+    inventario_config = categorias_config.get("inventario", {})
+    
+    # Buscar coincidencias específicas para medicamentos
+    if "medicamento" in categoria or "vacuna" in categoria:
+        clave_medicamento = f"medicamento_{tipo_tienda}"
+        if clave_medicamento in inventario_config:
+            return inventario_config[clave_medicamento]
+    
+    # Buscar otras categorías con estructura nombre_tienda
+    for cat_key, valor in inventario_config.items():
+        if categoria in cat_key.lower() and tipo_tienda in cat_key:
+            return valor
+    
+    # Buscar sin tipo de tienda
+    for cat_key, valor in inventario_config.items():
+        if categoria in cat_key.lower():
+            return valor
+    
     return meses_generales
 
 def obtener_minimo_categoria(subcategoria, tipo_tienda, config):
@@ -273,6 +280,7 @@ def obtener_minimo_medicamento(tipo_tienda, config):
     return minimos_medicamentos.get(tipo_tienda, 1)
 
 def obtener_minimo_para_pedir(subcategoria, tipo_tienda, config):
+    """Obtiene el mínimo para pedir según configuración"""
     minimos_pedir = config.get("minimos_para_pedir", {})
     if not subcategoria:
         return minimos_pedir.get(tipo_tienda, {}).get("default", 2)
@@ -328,16 +336,16 @@ class OdooConnection:
         self.connect()
 
     def connect(self):
-        print(" Conectando a Odoo...")
+        logger.info("Conectando a Odoo...")
         if not self.url.startswith("http://") and not self.url.startswith("https://"):
             raise ValueError("La URL de Odoo debe empezar con http:// o https://")
         try:
             common = xmlrpc.client.ServerProxy(f'{self.url}/xmlrpc/2/common')
             self.uid = common.authenticate(self.db, self.username, self.password, {})
             self.models = xmlrpc.client.ServerProxy(f'{self.url}/xmlrpc/2/object')
-            print(" Conexión exitosa con Odoo")
+            logger.info("Conexión exitosa con Odoo")
         except Exception as e:
-            print(f" Error conectando a Odoo: {e}")
+            logger.error(f"Error conectando a Odoo: {e}")
             raise
 
     def execute(self, model, method, *args, **kwargs):
@@ -347,19 +355,19 @@ class OdooConnection:
                 model, method, *args, **kwargs
             )
         except Exception as e:
-            print(f" Error ejecutando {method} en {model}: {e}")
+            logger.error(f"Error ejecutando {method} en {model}: {e}")
             raise
 
 def cargar_datos_reposicion():
     odoo = OdooConnection()
-    print("\n Buscando órdenes de reposición en estado borrador...")
+    logger.info("Buscando órdenes de reposición en estado borrador...")
     orders = odoo.execute(
         'estimated.replenishment.order',
         'search_read',
         [[('state', '=', 'draft')]],
         {'fields': ['id', 'shop_pos_ids']}
     )
-    print(f"└── Encontradas {len(orders)} órdenes en estado borrador\n")
+    logger.info(f"Encontradas {len(orders)} órdenes en estado borrador")
 
     all_lines = []
     all_product_ids = set()
@@ -391,7 +399,7 @@ def cargar_datos_reposicion():
                     all_lines.append(line)
                     all_product_ids.add(line['product_id'][0])
         except Exception as e:
-            print(f"Error procesando orden {order_id}: {e}")
+            logger.error(f"Error procesando orden {order_id}: {e}")
             continue
 
     return odoo, all_lines, all_product_ids
@@ -412,7 +420,7 @@ def is_cache_valid():
         last_update = datetime.fromisoformat(metadata['last_update'])
         return datetime.now() - last_update < timedelta(days=15)
     except Exception as e:
-        print(f"Error verificando metadata del caché: {e}")
+        logger.error(f"Error verificando metadata del caché: {e}")
         return False
 
 def save_products_cache(products_info):
@@ -427,7 +435,7 @@ def save_products_cache(products_info):
     }
     with open(metadata_path, 'w') as f:
         json.dump(metadata, f)
-    print(f" Caché actualizado con {len(products_info)} productos")
+    logger.info(f"Caché actualizado con {len(products_info)} productos")
 
 def load_products_cache():
     cache_path = get_cache_path()
@@ -435,24 +443,24 @@ def load_products_cache():
         with open(cache_path, 'rb') as f:
             return pickle.load(f)
     except Exception as e:
-        print(f"Error cargando caché: {e}")
+        logger.error(f"Error cargando caché: {e}")
         return None
 
 def get_product_info_with_cache(odoo, product_ids):
     if is_cache_valid():
-        print(" Usando caché de productos...")
+        logger.info("Usando caché de productos...")
         cached_products = load_products_cache()
         if cached_products is not None:
-            print(f" Caché cargado con {len(cached_products)} productos")
+            logger.info(f"Caché cargado con {len(cached_products)} productos")
             return cached_products
-    print(" Caché no válido o no existe, consultando productos desde Odoo...")
+    logger.info("Caché no válido o no existe, consultando productos desde Odoo...")
     products_info = get_product_info_in_batches(odoo, product_ids)
     save_products_cache(products_info)
     return products_info
 
 def get_product_info_in_batches(odoo, product_ids, batch_size=100):
     context_en = {'lang': 'en_US'}
-    print("\n Descargando todas las plantillas de productos (en inglés)...")
+    logger.info("Descargando todas las plantillas de productos (en inglés)...")
 
     all_templates = odoo.execute(
         'product.template',
@@ -477,20 +485,18 @@ def get_product_info_in_batches(odoo, product_ids, batch_size=100):
             template_by_ref[template['default_code']] = template
         template_by_id[template['id']] = template
 
-    print(f" {len(all_templates)} plantillas descargadas")
+    logger.info(f"{len(all_templates)} plantillas descargadas")
     products_info = {}
     total_products = len(product_ids)
     product_ids_list = list(product_ids)
     total_batches = (total_products + batch_size - 1) // batch_size
 
-    print(f"\n Progreso de consulta de productos:")
-    print(f"   Total productos: {total_products}")
-    print(f"   Total lotes: {total_batches}")
+    logger.info(f"Progreso de consulta de productos: Total productos: {total_products}, Total lotes: {total_batches}")
 
     for batch_num, i in enumerate(range(0, total_products, batch_size), 1):
         batch = product_ids_list[i:i + batch_size]
         progress = (batch_num / total_batches) * 100
-        print(f"   [{batch_num}/{total_batches}] {progress:.1f}% completado", end='\r')
+        logger.info(f"[{batch_num}/{total_batches}] {progress:.1f}% completado")
 
         try:
             batch_products = odoo.execute(
@@ -541,12 +547,12 @@ def get_product_info_in_batches(odoo, product_ids, batch_size=100):
                 products_info[product['id']] = product
 
         except Exception as e:
-            print(f"\nError procesando lote {batch_num}: {e}")
+            logger.error(f"Error procesando lote {batch_num}: {e}")
             continue
 
         time.sleep(0.05)
 
-    print("\n Consulta de productos completada")
+    logger.info("Consulta de productos completada")
     return products_info
 
 # ---------------------------------------------
@@ -557,6 +563,7 @@ def aplicar_reglas_cantidad_corregida(
     product_info, promedio_top2, stock_tienda, tienda, tipo, subcategoria=None,
     meses_inventario=1, disponible=0, productos_unidad_repos_invalida=None, config=None
 ):
+    """Versión corregida de aplicar_reglas_cantidad con mejor manejo de casos edge"""
     try:
         unidad_repos = obtener_unidad_reposicion(product_info)
         if not isinstance(unidad_repos, int) or unidad_repos < 1:
@@ -578,18 +585,6 @@ def aplicar_reglas_cantidad_corregida(
         elif tienda_l in TIENDAS_CHICAS:
             tipo_tienda = "chica"
 
-        # Normalizar categoría
-        categoria_nombre = str(product_info["categ_id"][1]) if len(product_info["categ_id"]) > 1 else ""
-        categoria_normalizada = normalizar_categoria(categoria_nombre)
-
-        # Validación estricta de categoría
-        meses_inventario_categoria = obtener_meses_inventario_por_categoria_y_tienda(categoria_normalizada, tipo_tienda, config)
-        print(f"DEBUG: Producto '{product_info.get('nombre_correcto', '')}', Categoría normalizada: '{categoria_normalizada}', Meses inventario: {meses_inventario_categoria}")
-        # Para depuración, comentar la siguiente línea para no bloquear todo:
-        # if meses_inventario_categoria == 0:
-        #     print(f"  [VALIDACIÓN] Producto {product_info.get('nombre_correcto', '')} (Categoría: {categoria_normalizada}) FORZADO A 0 por meses_inventario = 0")
-        #     return 0, "Categoría con meses de inventario = 0"
-
         # REGLA MEJORADA: Stock cero o ventas muy bajas
         if stock_tienda == 0 and aplicar_reglas_stock_cero_mejoradas(promedio_top2, config) and disponible >= unidad_repos:
             cantidad_minima = 0
@@ -605,12 +600,14 @@ def aplicar_reglas_cantidad_corregida(
                 cantidad_minima = obtener_minimo_medicamento(tipo_tienda, config)
                 motivo = "Pedido mínimo por stock 0 (medicamentos)"
 
+            # Priorizar mínimo producto si existe y es mayor
             minimo_producto = product_info.get("product_template", {}).get("x_studio_inventario_minimo", 0)
             if minimo_producto and minimo_producto > 0:
                 if minimo_producto > cantidad_minima:
                     cantidad_minima = minimo_producto
                     motivo = "Pedido mínimo por stock 0 (mínimo producto)"
 
+            # Redondear hacia arriba para cumplir mínimo por unidad de reposición
             cantidad = int(math.ceil(float(cantidad_minima) / unidad_repos) * unidad_repos)
 
             if cantidad > disponible:
@@ -624,9 +621,11 @@ def aplicar_reglas_cantidad_corregida(
                     return 0, f"Cantidad {cantidad} menor que mínimo para pedir {minimo_pedir}"
                 return cantidad, motivo
 
+        # CÁLCULO NORMAL BASADO EN VENTAS
         cantidad_objetivo = promedio_top2 * meses_inventario
         cantidad_a_pedir = max(0, cantidad_objetivo - stock_tienda)
 
+        # APLICAR MÍNIMOS POR CATEGORÍA
         cantidad_minima_categoria = 0
         motivo = "Pedido basado en ventas"
         
@@ -646,6 +645,7 @@ def aplicar_reglas_cantidad_corregida(
                 cantidad_minima_categoria = minimo_medicamento - stock_tienda
                 motivo = "Pedido ajustado por mínimo categoría (medicamentos)"
 
+        # APLICAR MÍNIMO PRODUCTO
         minimo_producto = product_info.get("product_template", {}).get("x_studio_inventario_minimo", 0)
         cantidad_minima_producto = 0
         if minimo_producto and minimo_producto > 0:
@@ -653,11 +653,14 @@ def aplicar_reglas_cantidad_corregida(
                 cantidad_minima_producto = minimo_producto - stock_tienda
                 motivo = "Pedido ajustado para alcanzar mínimo de inventario (producto)"
 
+        # Tomar máximo entre todas las cantidades calculadas
         cantidad = max(cantidad_a_pedir, cantidad_minima_categoria, cantidad_minima_producto)
 
+        # Redondear hacia arriba para cumplir mínimo por unidad de reposición
         if cantidad > 0:
             cantidad = int(math.ceil(float(cantidad) / unidad_repos) * unidad_repos)
 
+        # Aplicar máximo inventario si está definido
         maximo_producto = product_info.get("product_template", {}).get("x_studio_inventario_maximo", 0)
         if maximo_producto and maximo_producto > 0:
             maximo_pedido_posible = maximo_producto - stock_tienda
@@ -672,6 +675,7 @@ def aplicar_reglas_cantidad_corregida(
         if cantidad <= 0:
             return 0, "Cantidad calculada <= 0"
 
+        # Ajustar por stock disponible en bodega
         if cantidad > disponible:
             cantidad = (disponible // unidad_repos) * unidad_repos
             motivo += " - ajustado por stock bodega"
@@ -684,11 +688,10 @@ def aplicar_reglas_cantidad_corregida(
         if cantidad < unidad_repos:
             return 0, "Cantidad menor que unidad de reposición tras ajuste"
 
-        print(f"DEBUG: Producto '{product_info.get('nombre_correcto', '')}', Cantidad final: {cantidad}, Motivo: {motivo}")
         return int(cantidad), motivo
         
     except Exception as e:
-        print(f"Error en aplicar_reglas_cantidad para producto {product_info.get('default_code', '')}: {e}")
+        logger.error(f"Error en aplicar_reglas_cantidad para producto {product_info.get('default_code', '')}: {e}")
         return 0, f"Error: {e}"
 
 # ---------------------------------------------
@@ -700,7 +703,7 @@ def exportar_excel_pedido(df, path):
         df = df.sort_values(["Categoría", "Descripción"])
         df.to_excel(path, index=False)
     except Exception as e:
-        print(f"Error exportando Excel {path}: {e}")
+        logger.error(f"Error exportando Excel {path}: {e}")
 
 def generar_master_consolidado(productos):
     consolidado = {}
@@ -787,23 +790,33 @@ def escribir_log_mejorado(log_path, productos_no_suplidos, resumen_tiendas, prod
                 for p in productos_unidad_repos_invalida:
                     f.write(f" {p['producto']} ({p['codigo']}) - {p['categoria']}\n")
     except Exception as e:
-        print(f"Error escribiendo log {log_path}: {e}")
+        logger.error(f"Error escribiendo log {log_path}: {e}")
 
 # ---------------------------------------------
 # PROCESO PRINCIPAL CON LÓGICA DE SOLO CLÍNICA
 # ---------------------------------------------
 
-def procesar_pedidos_odoo_con_solo_clinica(output_dir="Pedidos_Sugeridos", config=None):
+def procesar_pedidos_odoo_con_solo_clinica(output_dir="Pedidos_Sugeridos", config=None, progress_callback=None):
     """VERSIÓN CON LÓGICA DE SOLO CLÍNICA - Excluye productos de Halloween y aplica filtro de clínica"""
     try:
-        print(" INICIANDO PROCESO DE PEDIDOS SUGERIDOS")
-        print(" PRODUCTOS DE HALLOWEEN Y NAVIDAD SERÁN EXCLUIDOS AUTOMÁTICAMENTE")
-        print(" PRODUCTOS SOLO CLÍNICA SOLO IRÁN A TIENDAS CON CLÍNICA")
-        print("=" * 80)
+        if progress_callback:
+            progress_callback("Iniciando proceso de pedidos sugeridos...")
+        
+        logger.info("INICIANDO PROCESO DE PEDIDOS SUGERIDOS")
+        logger.info("PRODUCTOS DE HALLOWEEN Y NAVIDAD SERÁN EXCLUIDOS AUTOMÁTICAMENTE")
+        logger.info("PRODUCTOS SOLO CLÍNICA SOLO IRÁN A TIENDAS CON CLÍNICA")
+        
         os.makedirs(output_dir, exist_ok=True)
 
+        if progress_callback:
+            progress_callback("Cargando datos de reposición...")
+        
         odoo, all_lines, all_product_ids = cargar_datos_reposicion()
-        print(f" Consultando información de {len(all_product_ids)} productos únicos...")
+        logger.info(f"Consultando información de {len(all_product_ids)} productos únicos...")
+        
+        if progress_callback:
+            progress_callback(f"Consultando información de {len(all_product_ids)} productos...")
+        
         product_dict = get_product_info_with_cache(odoo, all_product_ids)
 
         agrupado = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
@@ -814,7 +827,10 @@ def procesar_pedidos_odoo_con_solo_clinica(output_dir="Pedidos_Sugeridos", confi
         detalle_pedidos = defaultdict(list)
         productos_excluidos = []
 
-        print("\n Aplicando reglas de negocio y FILTROS DE EXCLUSIÓN...")
+        if progress_callback:
+            progress_callback("Aplicando reglas de negocio y filtros de exclusión...")
+        
+        logger.info("Aplicando reglas de negocio y FILTROS DE EXCLUSIÓN...")
 
         lineas_por_producto = defaultdict(list)
         for line in all_lines:
@@ -827,8 +843,14 @@ def procesar_pedidos_odoo_con_solo_clinica(output_dir="Pedidos_Sugeridos", confi
         productos_navidad_excluidos = 0
         productos_solo_clinica_excluidos = 0
 
-        for product_id, lineas in lineas_por_producto.items():
+        total_productos = len(lineas_por_producto)
+        
+        for idx, (product_id, lineas) in enumerate(lineas_por_producto.items()):
             productos_procesados += 1
+            
+            if progress_callback and idx % 100 == 0:
+                progress_callback(f"Procesando producto {idx + 1} de {total_productos}...")
+            
             product_info = product_dict.get(product_id, {})
             
             if not product_info or not product_info.get("categ_id"):
@@ -971,16 +993,19 @@ def procesar_pedidos_odoo_con_solo_clinica(output_dir="Pedidos_Sugeridos", confi
             "productos_solo_clinica_excluidos": productos_solo_clinica_excluidos
         }
 
-        print(f"\n RESUMEN DE PROCESAMIENTO:")
-        print(f"    Productos procesados: {productos_procesados}")
-        print(f"    Productos con pedidos: {productos_con_pedidos}")
-        print(f"    Productos de Halloween excluidos: {productos_halloween_excluidos}")
-        print(f"    Productos de Navidad excluidos: {productos_navidad_excluidos}")
-        print(f"    Productos solo clínica limitados: {productos_solo_clinica_excluidos}")
-        print(f"    Total productos excluidos: {len(productos_excluidos)}")
+        if progress_callback:
+            progress_callback("Generando archivos de pedidos...")
+
+        logger.info(f"RESUMEN DE PROCESAMIENTO:")
+        logger.info(f"    Productos procesados: {productos_procesados}")
+        logger.info(f"    Productos con pedidos: {productos_con_pedidos}")
+        logger.info(f"    Productos de Halloween excluidos: {productos_halloween_excluidos}")
+        logger.info(f"    Productos de Navidad excluidos: {productos_navidad_excluidos}")
+        logger.info(f"    Productos solo clínica limitados: {productos_solo_clinica_excluidos}")
+        logger.info(f"    Total productos excluidos: {len(productos_excluidos)}")
 
         secuencia_global = get_next_global_sequence()
-        print(f"\n Secuencia global para esta ejecución: {secuencia_global}")
+        logger.info(f"Secuencia global para esta ejecución: {secuencia_global}")
 
         # Crear carpeta global para medicamentos
         medicamentos_dir = os.path.join(output_dir, "medicamentos")
@@ -1002,24 +1027,17 @@ def procesar_pedidos_odoo_con_solo_clinica(output_dir="Pedidos_Sugeridos", confi
                     if not productos:
                         continue
 
-                    df = pd.DataFrame(productos)
-                    print(f"DEBUG: Exportando {len(productos)} productos para tienda '{tienda}', tipo '{tipo}'")
-                    if not all(col in df.columns for col in COLUMNS_OUT):
-                        print(f"ERROR: Columnas esperadas no están en DataFrame: {df.columns.tolist()}")
-                        print(f"Ejemplo producto: {productos[0] if productos else 'N/A'}")
-                        continue
-
-                    df = df[COLUMNS_OUT]
+                    df = pd.DataFrame(productos)[COLUMNS_OUT]
                     nombre_archivo = f"{nombre_tienda}_{ruta}_{tipo.upper()}_{secuencia_global}.xlsx"
 
                     if tipo == "medicamentos":
                         # Guardar medicamentos en carpeta global
                         exportar_excel_pedido(df, os.path.join(medicamentos_dir, nombre_archivo))
-                        print(f"    └─ {nombre_archivo} ({len(df)} productos) [Medicamentos en carpeta global]")
+                        logger.info(f"    └─ {nombre_archivo} ({len(df)} productos) [Medicamentos en carpeta global]")
                     else:
                         # Guardar otros tipos en carpeta por tienda y ruta
                         exportar_excel_pedido(df, os.path.join(carpeta_tienda, nombre_archivo))
-                        print(f"    └─ {nombre_archivo} ({len(df)} productos)")
+                        logger.info(f"    └─ {nombre_archivo} ({len(df)} productos)")
 
         # Generar MASTER INCLUYENDO MEDICAMENTOS
         for ruta, tipos in masters.items():
@@ -1032,15 +1050,11 @@ def procesar_pedidos_odoo_con_solo_clinica(output_dir="Pedidos_Sugeridos", confi
                     productos_master = [p for p in tipos[tipo_master] if p["Cantidad"] > 0]
                     if productos_master:
                         productos_consolidados = generar_master_consolidado(productos_master)
-                        df_master = pd.DataFrame(productos_consolidados)
-                        if not all(col in df_master.columns for col in COLUMNS_OUT):
-                            print(f"ERROR: Columnas esperadas no están en DataFrame master: {df_master.columns.tolist()}")
-                            continue
-                        df_master = df_master[COLUMNS_OUT]
+                        df_master = pd.DataFrame(productos_consolidados)[COLUMNS_OUT]
                         master_filename = f"MASTER_{tipo_master.upper()}_{ruta}_{secuencia_global}.xlsx"
                         master_path = os.path.join(ruta_dir, master_filename)
                         exportar_excel_pedido(df_master, master_path)
-                        print(f"   {master_filename} ({len(df_master)} productos únicos)")
+                        logger.info(f"   {master_filename} ({len(df_master)} productos únicos)")
 
         # Generar MASTER GLOBAL
         todos_los_productos = []
@@ -1051,14 +1065,10 @@ def procesar_pedidos_odoo_con_solo_clinica(output_dir="Pedidos_Sugeridos", confi
                         todos_los_productos.extend(productos)
 
         master_global = generar_master_consolidado(todos_los_productos)
-        df_master_global = pd.DataFrame(master_global)
-        if not all(col in df_master_global.columns for col in COLUMNS_OUT):
-            print(f"ERROR: Columnas esperadas no están en DataFrame master global: {df_master_global.columns.tolist()}")
-        else:
-            df_master_global = df_master_global[COLUMNS_OUT]
-            master_global_path = os.path.join(output_dir, f"MASTER_GLOBAL_{secuencia_global}.xlsx")
-            exportar_excel_pedido(df_master_global, master_global_path)
-            print(f"\n MASTER_GLOBAL generado: {master_global_path} ({len(df_master_global)} productos únicos)")
+        df_master_global = pd.DataFrame(master_global)[COLUMNS_OUT]
+        master_global_path = os.path.join(output_dir, f"MASTER_GLOBAL_{secuencia_global}.xlsx")
+        exportar_excel_pedido(df_master_global, master_global_path)
+        logger.info(f"MASTER_GLOBAL generado: {master_global_path} ({len(df_master_global)} productos únicos)")
 
         # Generar log mejorado
         log_path = os.path.join(output_dir, f"log_pedidos_{secuencia_global}.txt")
@@ -1072,19 +1082,35 @@ def procesar_pedidos_odoo_con_solo_clinica(output_dir="Pedidos_Sugeridos", confi
             estadisticas
         )
 
-        print("\n" + "=" * 80)
-        print(" PROCESO COMPLETADO EXITOSAMENTE")
-        print(f" {productos_halloween_excluidos} productos de Halloween fueron EXCLUIDOS")
-        print(f" {productos_navidad_excluidos} productos de Navidad fueron EXCLUIDOS")
-        print(f" Productos solo clínica LIMITADOS a tiendas con clínica")
-        print(f" Log detallado generado en: {log_path}")
-        print("=" * 80)
+        if progress_callback:
+            progress_callback("Proceso completado exitosamente!")
+
+        logger.info("=" * 80)
+        logger.info("PROCESO COMPLETADO EXITOSAMENTE")
+        logger.info(f"{productos_halloween_excluidos} productos de Halloween fueron EXCLUIDOS")
+        logger.info(f"{productos_navidad_excluidos} productos de Navidad fueron EXCLUIDOS")
+        logger.info("Productos solo clínica LIMITADOS a tiendas con clínica")
+        logger.info(f"Log detallado generado en: {log_path}")
+        logger.info("=" * 80)
         
-        return estadisticas
+        return {
+            "success": True,
+            "estadisticas": estadisticas,
+            "secuencia": secuencia_global,
+            "log_path": log_path,
+            "master_global_path": master_global_path
+        }
 
     except Exception as e:
-        print(f" Error crítico en proceso principal: {e}")
-        return None
+        error_msg = f"Error crítico en proceso principal: {e}"
+        logger.error(error_msg)
+        if progress_callback:
+            progress_callback(f"Error: {error_msg}")
+        return {
+            "success": False,
+            "error": error_msg,
+            "estadisticas": None
+        }
 
 # ---------------------------------------------
 # SECUENCIA GLOBAL PARA ARCHIVOS
@@ -1095,32 +1121,57 @@ def get_next_global_sequence():
     return now.strftime("%Y%m%d_%H%M%S")
 
 # ---------------------------------------------
-# EJECUCIÓN PRINCIPAL
+# FUNCIÓN PRINCIPAL PARA FLASK
+# ---------------------------------------------
+
+def ejecutar_pedidos_flask(progress_callback=None):
+    """Función principal para ejecutar desde Flask"""
+    try:
+        logger.info("SISTEMA DE PEDIDOS BLACK DOG - CON LÓGICA DE SOLO CLÍNICA")
+        logger.info("Los productos de Halloween y Navidad serán excluidos automáticamente")
+        logger.info("Los productos solo clínica solo irán a tiendas con clínica")
+        
+        logger.info("TIENDAS CON CLÍNICA:")
+        for tienda in sorted(TIENDAS_CON_CLINICA):
+            logger.info(f"    {tienda.title()}")
+        
+        config = cargar_configuracion("config_ajustes.json")
+        
+        # Usar la función CON LÓGICA DE SOLO CLÍNICA
+        resultado = procesar_pedidos_odoo_con_solo_clinica(config=config, progress_callback=progress_callback)
+        
+        if resultado["success"]:
+            estadisticas = resultado["estadisticas"]
+            logger.info("PROCESO COMPLETADO EXITOSAMENTE!")
+            logger.info("ESTADÍSTICAS FINALES:")
+            logger.info(f"   - Productos procesados: {estadisticas['productos_procesados']}")
+            logger.info(f"   - Productos con pedidos: {estadisticas['productos_con_pedidos']}")
+            logger.info(f"   - Productos de Halloween excluidos: {estadisticas['productos_halloween_excluidos']}")
+            logger.info(f"   - Productos de Navidad excluidos: {estadisticas['productos_navidad_excluidos']}")
+            logger.info(f"   - Productos solo clínica limitados: {estadisticas['productos_solo_clinica_excluidos']}")
+            logger.info("CONFIRMADO: Los productos de Halloween fueron EXCLUIDOS del proceso")
+            logger.info("CONFIRMADO: Los productos solo clínica solo van a tiendas con clínica")
+        else:
+            logger.error("El proceso falló. Revisa los errores anteriores.")
+        
+        return resultado
+        
+    except Exception as e:
+        error_msg = f"Error en ejecutar_pedidos_flask: {e}"
+        logger.error(error_msg)
+        if progress_callback:
+            progress_callback(f"Error: {error_msg}")
+        return {
+            "success": False,
+            "error": error_msg,
+            "estadisticas": None
+        }
+
+# ---------------------------------------------
+# EJECUCIÓN PRINCIPAL (SOLO SI SE EJECUTA DIRECTAMENTE)
 # ---------------------------------------------
 
 if __name__ == "__main__":
-    print(" SISTEMA DE PEDIDOS BLACK DOG - CON LÓGICA DE SOLO CLÍNICA")
-    print(" Los productos de Halloween y Navidad serán excluidos automáticamente")
-    print(" Los productos solo clínica solo irán a tiendas con clínica")
-    print("=" * 80)
-    
-    print("\n TIENDAS CON CLÍNICA:")
-    for tienda in sorted(TIENDAS_CON_CLINICA):
-        print(f"    {tienda.title()}")
-    
-    config = cargar_configuracion("config_ajustes.json")
-    
-    # Usar la función CON LÓGICA DE SOLO CLÍNICA
-    estadisticas = procesar_pedidos_odoo_con_solo_clinica(config=config)
-    if estadisticas:
-        print(f"\n PROCESO COMPLETADO EXITOSAMENTE!")
-        print(f" ESTADÍSTICAS FINALES:")
-        print(f"   - Productos procesados: {estadisticas['productos_procesados']}")
-        print(f"   - Productos con pedidos: {estadisticas['productos_con_pedidos']}")
-        print(f"   - Productos de Halloween excluidos: {estadisticas['productos_halloween_excluidos']}")
-        print(f"   - Productos de Navidad excluidos: {estadisticas['productos_navidad_excluidos']}")
-        print(f"   - Productos solo clínica limitados: {estadisticas['productos_solo_clinica_excluidos']}")
-        print("\n CONFIRMADO: Los productos de Halloween fueron EXCLUIDOS del proceso")
-        print(" CONFIRMADO: Los productos solo clínica solo van a tiendas con clínica")
-    else:
-        print(" El proceso falló. Revisa los errores anteriores.")
+    resultado = ejecutar_pedidos_flask()
+    if not resultado["success"]:
+        exit(1)
