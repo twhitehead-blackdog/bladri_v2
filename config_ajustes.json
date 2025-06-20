@@ -1,16 +1,16 @@
 {
   "meses_inventario": {
-    "general": 1.0,
+    "general": 0.9,
     "categorias": {
       "natural greatness_regular": 1.2,
       "natural greatness_chica": 1.2,
-      "gosbi_regular": 0.75,
-      "gosbi_chica": 0.75,
+      "gosbi_regular": 0.8,
+      "gosbi_chica": 0.8,
       "medicamento_regular": 1.1,
       "medicamento_chica": 1.1,
-      "bowls y feeders_regular": 1.0,
+      "bowls y feeders_regular": 0.6,
       "bowls y feeders_chica": 1.0,
-      "camas_regular": 1.0,
+      "camas_regular": 0.2,
       "camas_chica": 1.0,
       "kennel_regular": 1.0,
       "kennel_chica": 1.0,
@@ -55,7 +55,7 @@
     }
   },
   "minimos_alimentos": {
-    "regular": 2,
+    "regular": 1,
     "chica": 1
   },
   "minimos_accesorios": {
@@ -84,7 +84,7 @@
       "default": 3
     },
     "chica": {
-      "bowls y feeders": 2,
+      "bowls y feeders": 0,
       "camas": 1,
       "kennel": 1,
       "gimnasios y rascadores": 1,
