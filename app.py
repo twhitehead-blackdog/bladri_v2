@@ -35,7 +35,7 @@ CONFIG_DEFAULT = 'config_default.json'
 HISTORIAL_FILE = 'historial_zips.json'
 HISTORIAL_TXT_FILE = 'historial_txt.json'
 ZIPS_DIR = 'ZIPS_GENERADOS'
-PEDIDOS_DIR = 'pedidos_sugeridos'
+PEDIDOS_DIR = 'Pedidos_sugeridos'
 TXT_DIR = 'txt_subidos'
 LOGS_DIR = 'logs'
 
