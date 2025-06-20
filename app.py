@@ -13,6 +13,9 @@ from functools import wraps
 import logging
 from pathlib import Path
 
+# Base directory absoluto del proyecto
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 # Configurar logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -23,14 +26,15 @@ app.secret_key = os.environ.get('FLASK_SECRET_KEY', 'bladri123')
 # Configuración de sesiones
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(minutes=15)
 
-CONFIG_FILE = 'config_ajustes.json'
-CONFIG_DEFAULT = 'config_default.json'
-HISTORIAL_FILE = 'historial_zips.json'
-HISTORIAL_TXT_FILE = 'historial_txt.json'
-ZIPS_DIR = 'ZIPS_GENERADOS'
-PEDIDOS_DIR = 'pedidos_sugeridos'
-TXT_DIR = 'txt_subidos'
-LOGS_DIR = 'logs'
+# Rutas absolutas para archivos y carpetas
+CONFIG_FILE = os.path.join(BASE_DIR, 'config_ajustes.json')
+CONFIG_DEFAULT = os.path.join(BASE_DIR, 'config_default.json')
+HISTORIAL_FILE = os.path.join(BASE_DIR, 'historial_zips.json')
+HISTORIAL_TXT_FILE = os.path.join(BASE_DIR, 'historial_txt.json')
+ZIPS_DIR = os.path.join(BASE_DIR, 'ZIPS_GENERADOS')
+PEDIDOS_DIR = os.path.join(BASE_DIR, 'pedidos_sugeridos')
+TXT_DIR = os.path.join(BASE_DIR, 'txt_subidos')
+LOGS_DIR = os.path.join(BASE_DIR, 'logs')
 
 # Crear directorios necesarios
 for directory in [ZIPS_DIR, PEDIDOS_DIR, TXT_DIR, LOGS_DIR]:
